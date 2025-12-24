@@ -356,6 +356,7 @@
           requirements: "Requirements",
           preferences: "Preferences",
           schedule: "Schedule",
+          excelView: "Excel View",
           sections: "Sections"
         },
         employees: {
@@ -408,6 +409,21 @@
           lunch: "Lunch",
           dinner: "Dinner"
         },
+        excelView: {
+          title: "Excel View - Edit Schedule",
+          noSchedule: "No schedule yet. Go to Schedule tab and click 'Run Schedule' first!",
+          lunchCount: "Lunch Count",
+          dinnerCount: "Dinner Count",
+          allDayCount: "All Day Count",
+          clickToEdit: "Click to edit shift",
+          changeShift: "Change Shift",
+          currentShift: "Current",
+          changeTo: "Change to",
+          switchEmployee: "Switch Employee",
+          off: "OFF",
+          availableEmployees: "Available Employees",
+          swapWith: "Click to swap with"
+        },
         sections: {
           title: "Section Assignment",
           comingSoon: "Coming soon!"
@@ -421,6 +437,7 @@
           requirements: "인원 설정",
           preferences: "희망 스케줄",
           schedule: "스케줄",
+          excelView: "엑셀 뷰",
           sections: "섹션"
         },
         employees: {
@@ -486,6 +503,7 @@
           requirements: "Yêu Cầu",
           preferences: "Mong Muốn",
           schedule: "Lịch Làm",
+          excelView: "Excel",
           sections: "Khu Vực"
         },
         employees: {
@@ -685,6 +703,7 @@
           ${state.activeTab === 'requirements' ? renderRequirementsTab(t) : ''}
           ${state.activeTab === 'preferences' ? renderPreferencesTab(t) : ''}
           ${state.activeTab === 'schedule' ? renderScheduleTab(t) : ''}
+          ${state.activeTab === 'excelView' ? renderExcelViewTab(t) : ''}
           ${state.activeTab === 'sections' ? renderSectionsTab(t) : ''}
         </div>
       `;
@@ -1103,6 +1122,151 @@
     }
 
     // ============================================
+    // ============================================
+    // EXCEL VIEW TAB - 엑셀 뷰 탭
+    // ============================================
+    function renderExcelViewTab(t) {
+      if (!state.schedule || Object.keys(state.schedule).length === 0) {
+        return `
+          <div style="padding:60px;text-align:center;">
+            <div style="font-size:48px;margin-bottom:16px;">📊</div>
+            <h3>${t.excelView.noSchedule}</h3>
+          </div>
+        `;
+      }
+
+      // 정해진 직원 순서
+      const employeeOrder = [
+        'Aiden', 'Carlos', 'Edgar', 'Hung', 'Thanh', 'Tien', 'Tommy', 'Judy', 
+        'Justin', 'Tina N', 'Alan', 'Chau', 'Le', 'Crystal', 'Tue', 'Cherry', 
+        'Christine', 'Hieu', 'Kai', 'Dat', 'Johnny', 'Ly', 'Tho', 'Kha', 
+        'Phung', 'Ye', 'Esther', 'Duc', 'Jimmy', 'Aca', 'Vivi', 'Catherine', 
+        'Tiffany', 'Steven', 'Chris', 'Dung'
+      ];
+
+      // 활성 직원 정렬
+      const orderedEmployees = [];
+      employeeOrder.forEach(name => {
+        const emp = state.employees.find(e => e.name === name && e.status === 'active');
+        if (emp) orderedEmployees.push(emp);
+      });
+
+      // 순서에 없는 직원 추가
+      state.employees.filter(e => e.status === 'active').forEach(emp => {
+        if (!employeeOrder.includes(emp.name)) {
+          orderedEmployees.push(emp);
+        }
+      });
+
+      return `
+        <div>
+          <h2 style="margin:0 0 24px 0;font-size:24px;font-weight:600;">${t.excelView.title}</h2>
+          
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;background:white;">
+              <thead>
+                <tr style="background:#667eea;color:white;">
+                  <th style="padding:12px;border:2px solid #333;width:40px;">#</th>
+                  <th style="padding:12px;border:2px solid #333;width:120px;">Name</th>
+                  ${DAYS.map(day => {
+                    const t = TRANSLATIONS[state.language];
+                    return `
+                      <th colspan="2" style="padding:12px;border:2px solid #333;">
+                        ${t.days?.[day] || day}
+                      </th>
+                    `;
+                  }).join('')}
+                </tr>
+                <tr style="background:#9D4EDD;color:white;font-size:13px;">
+                  <th colspan="2" style="border:2px solid #333;"></th>
+                  ${DAYS.map(() => `
+                    <th style="padding:8px;border:2px solid #333;">Lunch</th>
+                    <th style="padding:8px;border:2px solid #333;">Dinner</th>
+                  `).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${orderedEmployees.map((emp, idx) => {
+                  return `
+                    <tr>
+                      <td style="padding:8px;border:2px solid #333;text-align:center;background:#f0f0f0;font-weight:600;">${idx + 1}</td>
+                      <td style="padding:8px;border:2px solid #333;font-weight:600;background:#f9f9f9;">${emp.name}</td>
+                      ${DAYS.map(day => {
+                        const daySchedule = state.schedule[day] || {};
+                        const lunchShift = (daySchedule.lunch || []).find(e => e.id === emp.id);
+                        const dinnerShift = (daySchedule.dinner || []).find(e => e.id === emp.id);
+                        
+                        return `
+                          <td onclick="editShift('${emp.id}', '${day}', 'lunch')" 
+                              style="padding:10px;border:2px solid #333;cursor:pointer;text-align:center;
+                                     background:${getShiftColor(lunchShift?.shift)};
+                                     ${lunchShift ? 'font-weight:600;' : ''}">
+                            ${lunchShift ? lunchShift.shift : ''}
+                          </td>
+                          <td onclick="editShift('${emp.id}', '${day}', 'dinner')" 
+                              style="padding:10px;border:2px solid #333;cursor:pointer;text-align:center;
+                                     background:${getShiftColor(dinnerShift?.shift)};
+                                     ${dinnerShift ? 'font-weight:600;' : ''}">
+                            ${dinnerShift ? dinnerShift.shift : ''}
+                          </td>
+                        `;
+                      }).join('')}
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+              <tfoot>
+                <tr style="background:#E8F5E9;font-weight:700;">
+                  <td colspan="2" style="padding:12px;border:2px solid #333;text-align:right;">Lunch Count:</td>
+                  ${DAYS.map(day => {
+                    const daySchedule = state.schedule[day] || {};
+                    const lunchCount = (daySchedule.lunch || []).length;
+                    return `
+                      <td style="padding:12px;border:2px solid #333;text-align:center;color:#2E7D32;">${lunchCount}</td>
+                      <td style="border:2px solid #333;background:#fff;"></td>
+                    `;
+                  }).join('')}
+                </tr>
+                <tr style="background:#E3F2FD;font-weight:700;">
+                  <td colspan="2" style="padding:12px;border:2px solid #333;text-align:right;">Dinner Count:</td>
+                  ${DAYS.map(day => {
+                    const daySchedule = state.schedule[day] || {};
+                    const dinnerCount = (daySchedule.dinner || []).length;
+                    return `
+                      <td style="border:2px solid #333;background:#fff;"></td>
+                      <td style="padding:12px;border:2px solid #333;text-align:center;color:#1565C0;">${dinnerCount}</td>
+                    `;
+                  }).join('')}
+                </tr>
+                <tr style="background:#FFF3E0;font-weight:700;">
+                  <td colspan="2" style="padding:12px;border:2px solid #333;text-align:right;">All Day Count:</td>
+                  ${DAYS.map(day => {
+                    const daySchedule = state.schedule[day] || {};
+                    const lunchNames = (daySchedule.lunch || []).map(e => e.name);
+                    const dinnerNames = (daySchedule.dinner || []).map(e => e.name);
+                    const allDayCount = lunchNames.filter(name => dinnerNames.includes(name)).length;
+                    return `
+                      <td colspan="2" style="padding:12px;border:2px solid #333;text-align:center;color:#F57C00;">${allDayCount}</td>
+                    `;
+                  }).join('')}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    // 시프트 색상 반환
+    function getShiftColor(shift) {
+      if (!shift) return '#ffffff';
+      if (shift.includes('Open')) return '#FFD93D';  // 🟡 노란색
+      if (shift.includes('11:00') || shift.includes('11:30')) return '#6BCB77';  // 🟢 초록색
+      if (shift.includes('3:30')) return '#4D96FF';  // 🔵 파란색
+      if (shift.includes('6:00') || shift.includes('6 PM')) return '#9D4EDD';  // 🟣 보라색
+      return '#ffffff';
+    }
+
     // SECTIONS TAB - 섹션 탭
     // ============================================
     function renderSectionsTab(t) {
@@ -1529,6 +1693,244 @@
       XLSX.writeFile(wb, `Shabu_Zone_Schedule_${today}.xlsx`);
       
       alert('✅ Excel file downloaded! Open it to see formulas that auto-update when you change shifts.');
+    };
+
+    // --- 시프트 편집 (Excel View) ---
+    window.editShift = (empId, day, period) => {
+      const emp = state.employees.find(e => e.id === parseInt(empId));
+      if (!emp) return;
+
+      const daySchedule = state.schedule[day] || { lunch: [], dinner: [] };
+      const currentShift = period === 'lunch' 
+        ? daySchedule.lunch.find(e => e.id === emp.id)
+        : daySchedule.dinner.find(e => e.id === emp.id);
+
+      const t = TRANSLATIONS[state.language];
+      const dayName = t.days?.[day] || day;
+      const periodName = period === 'lunch' ? 'Lunch' : 'Dinner';
+
+      // 가능한 시프트 옵션
+      const shiftOptions = period === 'lunch' 
+        ? ['Open~Break', '11:00~Break', '11:30~Break']
+        : ['3:30~Close', '6:00~Close'];
+
+      const modalHTML = `
+        <div class="modal show" onclick="if(event.target === this) closeShiftModal()">
+          <div class="modal-content" style="max-width:500px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+              <h3 style="margin:0;">${dayName} ${periodName} - ${emp.name}</h3>
+              <button onclick="closeShiftModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;">×</button>
+            </div>
+
+            ${currentShift ? `
+              <div style="padding:12px;background:#E3F2FD;border-radius:8px;margin-bottom:20px;">
+                <strong>Current:</strong> 
+                <span style="padding:4px 12px;background:${getShiftColor(currentShift.shift)};border-radius:6px;display:inline-block;margin-left:8px;">
+                  ${currentShift.shift}
+                </span>
+              </div>
+            ` : `
+              <div style="padding:12px;background:#FFF3E0;border-radius:8px;margin-bottom:20px;">
+                <strong>Currently:</strong> OFF
+              </div>
+            `}
+
+            <div style="margin-bottom:20px;">
+              <h4 style="margin:0 0 12px 0;">Change to:</h4>
+              ${shiftOptions.map(shift => `
+                <button onclick="changeShift(${empId}, '${day}', '${period}', '${shift}')" 
+                        style="display:block;width:100%;padding:12px;margin-bottom:8px;
+                               background:${getShiftColor(shift)};border:2px solid #333;
+                               border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;
+                               ${currentShift?.shift === shift ? 'opacity:0.5;' : ''}">
+                  ${shift}
+                </button>
+              `).join('')}
+              <button onclick="changeShift(${empId}, '${day}', '${period}', '')" 
+                      style="display:block;width:100%;padding:12px;background:white;
+                             border:2px solid #ddd;border-radius:8px;cursor:pointer;
+                             font-weight:600;color:#666;">
+                OFF (Remove shift)
+              </button>
+            </div>
+
+            <button onclick="showSwapOptions(${empId}, '${day}', '${period}')" 
+                    class="btn-secondary" style="width:100%;padding:14px;font-size:15px;">
+              🔄 Switch Employee
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.insertAdjacentHTML('beforeend', modalHTML);
+    };
+
+    // --- 시프트 변경 ---
+    window.changeShift = async (empId, day, period, newShift) => {
+      const emp = state.employees.find(e => e.id === parseInt(empId));
+      if (!emp) return;
+
+      if (!state.schedule[day]) {
+        state.schedule[day] = { lunch: [], dinner: [] };
+      }
+
+      const shifts = state.schedule[day][period];
+      const existingIndex = shifts.findIndex(e => e.id === emp.id);
+
+      if (newShift === '') {
+        // Remove shift
+        if (existingIndex !== -1) {
+          shifts.splice(existingIndex, 1);
+        }
+      } else {
+        // Add or update shift
+        const shiftData = {
+          name: emp.name,
+          shift: newShift,
+          id: emp.id,
+          isFixed: false
+        };
+
+        if (existingIndex !== -1) {
+          shifts[existingIndex] = shiftData;
+        } else {
+          shifts.push(shiftData);
+        }
+      }
+
+      await saveSchedule();
+      closeShiftModal();
+      render();
+    };
+
+    // --- Switch 옵션 표시 ---
+    window.showSwapOptions = (empId, day, period) => {
+      const emp = state.employees.find(e => e.id === parseInt(empId));
+      if (!emp) return;
+
+      const daySchedule = state.schedule[day] || { lunch: [], dinner: [] };
+      const assignedIds = [...daySchedule.lunch.map(e => e.id), ...daySchedule.dinner.map(e => e.id)];
+
+      const availableEmployees = state.employees
+        .filter(e => e.status === 'active' && !assignedIds.includes(e.id))
+        .map(e => {
+          const prefs = state.preferences[e.id]?.[day];
+          let prefText = 'No preference';
+          let prefColor = '#999';
+
+          if (period === 'lunch' && prefs?.morning) {
+            if (prefs.morning === 1) {
+              prefText = '🟡 Prefers Open';
+              prefColor = '#FFD93D';
+            } else if (prefs.morning === 2) {
+              prefText = '🟢 Prefers 11:00/11:30';
+              prefColor = '#6BCB77';
+            }
+          } else if (period === 'dinner' && prefs?.evening) {
+            if (prefs.evening === 1) {
+              prefText = '🔵 Prefers 3:30';
+              prefColor = '#4D96FF';
+            } else if (prefs.evening === 2) {
+              prefText = '🟣 Prefers 6:00';
+              prefColor = '#9D4EDD';
+            }
+          }
+
+          return { emp: e, prefText, prefColor };
+        });
+
+      const t = TRANSLATIONS[state.language];
+      const dayName = t.days?.[day] || day;
+      const periodName = period === 'lunch' ? 'Lunch' : 'Dinner';
+
+      const currentShift = period === 'lunch'
+        ? daySchedule.lunch.find(e => e.id === emp.id)
+        : daySchedule.dinner.find(e => e.id === emp.id);
+
+      const swapHTML = `
+        <div class="modal show" onclick="if(event.target === this) closeShiftModal()">
+          <div class="modal-content" style="max-width:600px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+              <h3 style="margin:0;">Switch ${emp.name} - ${dayName} ${periodName}</h3>
+              <button onclick="closeShiftModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;">×</button>
+            </div>
+
+            ${availableEmployees.length === 0 ? `
+              <div style="padding:40px;text-align:center;background:#f9f9f9;border-radius:12px;">
+                <p style="color:#666;">No available employees for swap</p>
+                <button onclick="editShift(${empId}, '${day}', '${period}')" class="btn-secondary" style="margin-top:16px;">
+                  ← Back
+                </button>
+              </div>
+            ` : `
+              <p style="margin-bottom:16px;color:#666;">Click an employee to swap:</p>
+              <div style="max-height:400px;overflow-y:auto;">
+                ${availableEmployees.map(({ emp: availEmp, prefText, prefColor }) => `
+                  <div onclick="swapEmployee(${empId}, ${availEmp.id}, '${day}', '${period}', '${currentShift?.shift || ''}')" 
+                       style="padding:14px;margin-bottom:8px;background:#f9f9f9;border-radius:8px;
+                              border-left:4px solid ${prefColor};cursor:pointer;
+                              transition:background 0.2s;"
+                       onmouseover="this.style.background='#e3f2fd'"
+                       onmouseout="this.style.background='#f9f9f9'">
+                    <div style="font-weight:600;font-size:15px;margin-bottom:4px;">${availEmp.name}</div>
+                    <div style="font-size:13px;color:#666;">${prefText}</div>
+                  </div>
+                `).join('')}
+              </div>
+              <button onclick="editShift(${empId}, '${day}', '${period}')" class="btn-secondary" style="width:100%;margin-top:16px;">
+                ← Back
+              </button>
+            `}
+          </div>
+        </div>
+      `;
+
+      const existingModal = document.querySelector('.modal.show');
+      if (existingModal) existingModal.remove();
+      document.body.insertAdjacentHTML('beforeend', swapHTML);
+    };
+
+    // --- 직원 교체 ---
+    window.swapEmployee = async (removeEmpId, addEmpId, day, period, currentShift) => {
+      const removeEmp = state.employees.find(e => e.id === parseInt(removeEmpId));
+      const addEmp = state.employees.find(e => e.id === parseInt(addEmpId));
+      if (!removeEmp || !addEmp) return;
+
+      if (!state.schedule[day]) {
+        state.schedule[day] = { lunch: [], dinner: [] };
+      }
+
+      const shifts = state.schedule[day][period];
+
+      // Remove old employee
+      const removeIndex = shifts.findIndex(e => e.id === removeEmp.id);
+      if (removeIndex !== -1) {
+        shifts.splice(removeIndex, 1);
+      }
+
+      // Add new employee (keep same shift if exists, otherwise use preference)
+      let newShift = currentShift;
+      if (!newShift) {
+        // Use first available shift option
+        newShift = period === 'lunch' ? 'Open~Break' : '3:30~Close';
+      }
+
+      shifts.push({
+        name: addEmp.name,
+        shift: newShift,
+        id: addEmp.id,
+        isFixed: false
+      });
+
+      await saveSchedule();
+      closeShiftModal();
+      render();
+    };
+
+    // --- 시프트 모달 닫기 ---
+    window.closeShiftModal = () => {
+      const modal = document.querySelector('.modal.show');
+      if (modal) modal.remove();
     };
 
     // --- 가능한 직원 모달 닫기 ---
