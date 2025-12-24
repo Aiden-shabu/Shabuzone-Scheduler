@@ -983,9 +983,14 @@
                   <div class="schedule-shift">
                     <h4 style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                       <span>☀️ ${t.schedule.lunch}</span>
-                      <span style="font-size:11px;font-weight:normal;color:#666;">
-                        ${lunchAssigned}/${lunchNeed}
-                      </span>
+                      <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;font-weight:normal;color:#666;">
+                          ${lunchAssigned}/${lunchNeed}
+                        </span>
+                        <button onclick="showAvailable('${day}', 'lunch')" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px;" title="View available employees">
+                          🔍
+                        </button>
+                      </div>
                     </h4>
                     
                     ${lunchDiff < 0 ? `
@@ -1004,9 +1009,10 @@
                     
                     ${(daySchedule.lunch || []).map(emp => {
                       const isAllDay = allDayPeople.includes(emp.name);
+                      const fixedMark = emp.isFixed ? ' *' : '';
                       return `
                         <div class="schedule-person" style="${isAllDay ? 'font-weight:700;border-left:3px solid #D32F2F;' : ''}">
-                          ${isAllDay ? '🔴 ' : ''}${emp.name} <span style="font-size:11px;color:#666;">(${emp.shift})</span>
+                          ${isAllDay ? '🔴 ' : ''}${emp.name}${fixedMark} <span style="font-size:11px;color:#666;">(${emp.shift})</span>
                         </div>
                       `;
                     }).join('') || '<div style="color:#999;font-size:12px;padding:8px;">No assignments</div>'}
@@ -1016,9 +1022,14 @@
                   <div class="schedule-shift">
                     <h4 style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                       <span>🌙 ${t.schedule.dinner}</span>
-                      <span style="font-size:11px;font-weight:normal;color:#666;">
-                        ${dinnerAssigned}/${dinnerNeed}
-                      </span>
+                      <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;font-weight:normal;color:#666;">
+                          ${dinnerAssigned}/${dinnerNeed}
+                        </span>
+                        <button onclick="showAvailable('${day}', 'dinner')" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px;" title="View available employees">
+                          🔍
+                        </button>
+                      </div>
                     </h4>
                     
                     ${dinnerDiff < 0 ? `
@@ -1037,9 +1048,10 @@
                     
                     ${(daySchedule.dinner || []).map(emp => {
                       const isAllDay = allDayPeople.includes(emp.name);
+                      const fixedMark = emp.isFixed ? ' *' : '';
                       return `
                         <div class="schedule-person" style="${isAllDay ? 'font-weight:700;border-left:3px solid #D32F2F;' : ''}">
-                          ${isAllDay ? '🔴 ' : ''}${emp.name} <span style="font-size:11px;color:#666;">(${emp.shift})</span>
+                          ${isAllDay ? '🔴 ' : ''}${emp.name}${fixedMark} <span style="font-size:11px;color:#666;">(${emp.shift})</span>
                         </div>
                       `;
                     }).join('') || '<div style="color:#999;font-size:12px;padding:8px;">No assignments</div>'}
@@ -1265,6 +1277,98 @@
         saveEmployees();
         render();
       }
+    };
+
+    // --- 가능한 직원 보기 (돋보기 버튼) ---
+    window.showAvailable = (day, period) => {
+      const daySchedule = state.schedule[day] || {};
+      const activeEmployees = state.employees.filter(e => e.status === 'active');
+      
+      // 이미 배정된 직원 ID
+      const assignedIds = [
+        ...(daySchedule.lunch || []).map(e => e.id),
+        ...(daySchedule.dinner || []).map(e => e.id)
+      ];
+      
+      // 배정 안 된 직원들
+      const availableEmployees = activeEmployees.filter(emp => 
+        !assignedIds.includes(emp.id)
+      );
+      
+      // Preference 정보 포함
+      const employeesWithPrefs = availableEmployees.map(emp => {
+        const prefs = state.preferences[emp.id]?.[day];
+        let prefText = 'No preference';
+        let prefColor = '#999';
+        
+        if (period === 'lunch' && prefs?.morning) {
+          if (prefs.morning === 1) {
+            prefText = '🟡 Prefers Open';
+            prefColor = '#FFD93D';
+          } else if (prefs.morning === 2) {
+            prefText = '🟢 Prefers 11:00/11:30';
+            prefColor = '#6BCB77';
+          }
+        } else if (period === 'dinner' && prefs?.evening) {
+          if (prefs.evening === 1) {
+            prefText = '🔵 Prefers 3:30';
+            prefColor = '#4D96FF';
+          } else if (prefs.evening === 2) {
+            prefText = '🟣 Prefers 6:00';
+            prefColor = '#9D4EDD';
+          }
+        }
+        
+        return { emp, prefText, prefColor };
+      });
+      
+      // 모달 생성
+      const t = TRANSLATIONS[state.language];
+      const periodName = period === 'lunch' ? t.schedule.lunch : t.schedule.dinner;
+      const dayName = t.days?.[day] || day;
+      
+      const modalHTML = `
+        <div class="modal show" onclick="if(event.target === this) closeAvailableModal()">
+          <div class="modal-content" style="max-width:600px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+              <h3 style="margin:0;">🔍 Available for ${dayName} ${periodName}</h3>
+              <button onclick="closeAvailableModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;">×</button>
+            </div>
+            
+            ${employeesWithPrefs.length === 0 ? `
+              <div style="padding:40px;text-align:center;background:#f9f9f9;border-radius:12px;">
+                <div style="font-size:48px;margin-bottom:16px;">✅</div>
+                <p style="color:#666;font-size:16px;">All active employees are already assigned!</p>
+              </div>
+            ` : `
+              <div style="max-height:400px;overflow-y:auto;">
+                ${employeesWithPrefs.map(({ emp, prefText, prefColor }) => `
+                  <div style="padding:12px;margin-bottom:8px;background:#f9f9f9;border-radius:8px;border-left:4px solid ${prefColor};">
+                    <div style="font-weight:600;font-size:15px;margin-bottom:4px;">${emp.name}</div>
+                    <div style="font-size:13px;color:#666;">${prefText}</div>
+                  </div>
+                `).join('')}
+              </div>
+              
+              <div style="margin-top:20px;padding:12px;background:#E3F2FD;border-radius:8px;font-size:13px;">
+                💡 <strong>Tip:</strong> These employees are not currently assigned to any shift on ${dayName}.
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+      
+      // 모달 표시
+      const existingModal = document.querySelector('.modal.show');
+      if (existingModal) existingModal.remove();
+      
+      document.body.insertAdjacentHTML('beforeend', modalHTML);
+    };
+    
+    // --- 가능한 직원 모달 닫기 ---
+    window.closeAvailableModal = () => {
+      const modal = document.querySelector('.modal.show');
+      if (modal) modal.remove();
     };
 
     // --- 모달 닫기 ---
