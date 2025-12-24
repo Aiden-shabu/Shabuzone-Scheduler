@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Shabu Zone Schedule Manager</title>
   
+  <!-- SheetJS for Excel export -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  
   <!-- ============================================ -->
   <!-- CSS STYLES - 스타일 정의 -->
   <!-- ============================================ -->
@@ -944,9 +947,14 @@
       return `
         <div style="display:flex;justify-content:space-between;margin-bottom:24px;">
           <h2 style="margin:0;font-size:24px;font-weight:600;">${t.schedule.title}</h2>
-          <button class="btn-primary" onclick="runScheduleGeneration()" ${state.generating ? 'disabled' : ''}>
-            ${state.generating ? '⏳' : '▶️'} ${state.generating ? t.schedule.generating : t.schedule.runSchedule}
-          </button>
+          <div style="display:flex;gap:12px;">
+            <button class="btn-secondary" onclick="downloadExcel()" style="display:inline-flex;align-items:center;gap:8px;">
+              📥 Download Excel
+            </button>
+            <button class="btn-primary" onclick="runScheduleGeneration()" ${state.generating ? 'disabled' : ''}>
+              ${state.generating ? '⏳' : '▶️'} ${state.generating ? t.schedule.generating : t.schedule.runSchedule}
+            </button>
+          </div>
         </div>
 
         ${!hasSchedule ? `
@@ -1385,6 +1393,87 @@
       document.body.insertAdjacentHTML('beforeend', modalHTML);
     };
     
+    // --- Excel 다운로드 ---
+    window.downloadExcel = () => {
+      if (!state.schedule || Object.keys(state.schedule).length === 0) {
+        alert('⚠️ No schedule generated yet! Please run schedule generation first.');
+        return;
+      }
+
+      // 엑셀 데이터 준비
+      const wb = XLSX.utils.book_new();
+      
+      // 데이터 배열 생성
+      const data = [];
+      
+      // Header Row 1: "Schedule"
+      data.push(['Schedule']);
+      
+      // Header Row 2: Name + Dates
+      const headerRow2 = ['', 'Name'];
+      DAYS.forEach(day => {
+        const t = TRANSLATIONS[state.language];
+        headerRow2.push(t.days?.[day] || day);
+      });
+      data.push(headerRow2);
+      
+      // Header Row 3: Day names
+      const headerRow3 = ['', ''];
+      DAYS.forEach(day => {
+        headerRow3.push(day.substring(0, 3));
+      });
+      data.push(headerRow3);
+      
+      // 직원 데이터
+      const activeEmployees = state.employees.filter(e => e.status === 'active');
+      let rowNum = 1;
+      
+      activeEmployees.forEach(emp => {
+        // Lunch row
+        const lunchRow = [rowNum, emp.name];
+        DAYS.forEach(day => {
+          const daySchedule = state.schedule[day] || {};
+          const lunchShift = (daySchedule.lunch || []).find(e => e.id === emp.id);
+          lunchRow.push(lunchShift ? lunchShift.shift : '');
+        });
+        data.push(lunchRow);
+        
+        // Dinner row
+        const dinnerRow = ['', ''];
+        DAYS.forEach(day => {
+          const daySchedule = state.schedule[day] || {};
+          const dinnerShift = (daySchedule.dinner || []).find(e => e.id === emp.id);
+          dinnerRow.push(dinnerShift ? dinnerShift.shift : '');
+        });
+        data.push(dinnerRow);
+        
+        rowNum++;
+      });
+      
+      // 워크시트 생성
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      
+      // 열 너비 설정
+      ws['!cols'] = [
+        { wch: 5 },   // A: Number
+        { wch: 12 },  // B: Name
+        { wch: 14 },  // C-I: Days
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 14 }
+      ];
+      
+      // 워크북에 추가
+      XLSX.utils.book_append_sheet(wb, ws, 'Schedule');
+      
+      // 파일 다운로드
+      const today = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(wb, `Shabu_Zone_Schedule_${today}.xlsx`);
+    };
+
     // --- 가능한 직원 모달 닫기 ---
     window.closeAvailableModal = () => {
       const modal = document.querySelector('.modal.show');
