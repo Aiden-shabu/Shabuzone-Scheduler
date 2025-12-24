@@ -591,6 +591,7 @@
         reqs[day] = {
           lunch: { open: 4, eleven: 2, elevenThirty: 3 },
           dinner: { threeThirty: 8, six: 0 },
+          allDayMax: 0,
           isHoliday: false
         };
       });
@@ -761,6 +762,7 @@
               <th rowspan="2" style="width:80px;">Lunch<br>Total</th>
               <th colspan="2">${t.requirements.dinner}</th>
               <th rowspan="2" style="width:80px;">Dinner<br>Total</th>
+              <th rowspan="2" style="width:80px;">All Day<br>Max</th>
               <th rowspan="2" style="width:100px;">${t.requirements.holiday}</th>
             </tr>
             <tr>
@@ -787,6 +789,7 @@
                   <td><input type="number" min="0" value="${req.dinner.threeThirty}" onchange="updateRequirement('${day}', 'dinner', 'threeThirty', this.value)"></td>
                   <td><input type="number" min="0" value="${req.dinner.six}" onchange="updateRequirement('${day}', 'dinner', 'six', this.value)"></td>
                   <td style="font-weight:700;background:#E3F2FD;color:#1565C0;font-size:16px;">${dinnerTotal}</td>
+                  <td><input type="number" min="0" value="${req.allDayMax || 0}" onchange="updateAllDayMax('${day}', this.value)" style="width:60px;"></td>
                   <td>
                     <input type="checkbox" ${req.isHoliday ? 'checked' : ''} onchange="toggleHoliday('${day}')" style="cursor:pointer;width:20px;height:20px;">
                   </td>
@@ -1059,8 +1062,25 @@
 
                   <!-- ALL DAY SUMMARY -->
                   ${allDayPeople.length > 0 ? `
-                    <div style="margin-top:12px;padding:8px;background:#FFF3E0;border-radius:6px;border-left:3px solid #F57C00;">
-                      <div style="font-size:11px;font-weight:600;color:#E65100;margin-bottom:4px;">📊 All Day: ${allDayPeople.length}</div>
+                    <div style="margin-top:12px;padding:8px;background:${
+                      req.allDayMax && allDayPeople.length > req.allDayMax 
+                        ? '#FFEBEE' 
+                        : '#FFF3E0'
+                    };border-radius:6px;border-left:3px solid ${
+                      req.allDayMax && allDayPeople.length > req.allDayMax 
+                        ? '#C62828' 
+                        : '#F57C00'
+                    };">
+                      <div style="font-size:11px;font-weight:600;color:${
+                        req.allDayMax && allDayPeople.length > req.allDayMax 
+                          ? '#C62828' 
+                          : '#E65100'
+                      };margin-bottom:4px;">
+                        📊 All Day: ${allDayPeople.length}${req.allDayMax ? `/${req.allDayMax}` : ''} 
+                        ${req.allDayMax && allDayPeople.length > req.allDayMax 
+                          ? `⚠️ (${allDayPeople.length - req.allDayMax} over - remove some Fixed)` 
+                          : ''}
+                      </div>
                       <div style="font-size:11px;color:#666;">
                         ${allDayPeople.join(', ')}
                       </div>
@@ -1380,6 +1400,13 @@
     // --- Requirements 업데이트 ---
     window.updateRequirement = (day, period, shift, value) => {
       state.requirements[day][period][shift] = parseInt(value) || 0;
+      saveRequirements();
+      render();
+    };
+
+    // --- All Day Max 업데이트 ---
+    window.updateAllDayMax = (day, value) => {
+      state.requirements[day].allDayMax = parseInt(value) || 0;
       saveRequirements();
       render();
     };
