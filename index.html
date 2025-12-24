@@ -1409,7 +1409,7 @@
       // Header Row 1: "Schedule"
       data.push(['Schedule']);
       
-      // Header Row 2: Name + Dates
+      // Header Row 2: Name + Days
       const headerRow2 = ['', 'Name'];
       DAYS.forEach(day => {
         const t = TRANSLATIONS[state.language];
@@ -1417,7 +1417,7 @@
       });
       data.push(headerRow2);
       
-      // Header Row 3: Day names
+      // Header Row 3: Short day names
       const headerRow3 = ['', ''];
       DAYS.forEach(day => {
         headerRow3.push(day.substring(0, 3));
@@ -1427,6 +1427,7 @@
       // 직원 데이터
       const activeEmployees = state.employees.filter(e => e.status === 'active');
       let rowNum = 1;
+      const startRow = 4; // 데이터 시작 행 (Excel 1-indexed)
       
       activeEmployees.forEach(emp => {
         // Lunch row
@@ -1450,21 +1451,75 @@
         rowNum++;
       });
       
+      // 빈 줄
+      data.push([]);
+      
+      // Summary section
+      const summaryStartRow = data.length + 1;
+      
+      // Lunch Count row
+      const lunchCountRow = ['', 'Lunch Count:'];
+      DAYS.forEach((day, idx) => {
+        const col = String.fromCharCode(67 + idx); // C, D, E, ...
+        const formula = `=COUNTIF(${col}${startRow}:${col}${startRow + activeEmployees.length * 2 - 2},"<>""")`;
+        lunchCountRow.push(formula);
+      });
+      data.push(lunchCountRow);
+      
+      // Dinner Count row
+      const dinnerCountRow = ['', 'Dinner Count:'];
+      DAYS.forEach((day, idx) => {
+        const col = String.fromCharCode(67 + idx);
+        const formula = `=COUNTIF(${col}${startRow + 1}:${col}${startRow + activeEmployees.length * 2 - 1},"<>""")`;
+        dinnerCountRow.push(formula);
+      });
+      data.push(dinnerCountRow);
+      
+      // All Day Count row
+      const allDayCountRow = ['', 'All Day Count:'];
+      DAYS.forEach((day, idx) => {
+        const col = String.fromCharCode(67 + idx);
+        // Count people who have both lunch AND dinner on same day
+        const formula = `=SUMPRODUCT((${col}${startRow}:${col}${startRow + activeEmployees.length * 2 - 2}<>"")*(${col}${startRow + 1}:${col}${startRow + activeEmployees.length * 2 - 1}<>"")/2)`;
+        allDayCountRow.push(formula);
+      });
+      data.push(allDayCountRow);
+      
       // 워크시트 생성
       const ws = XLSX.utils.aoa_to_sheet(data);
       
       // 열 너비 설정
       ws['!cols'] = [
         { wch: 5 },   // A: Number
-        { wch: 12 },  // B: Name
-        { wch: 14 },  // C-I: Days
-        { wch: 14 },
-        { wch: 14 },
-        { wch: 14 },
-        { wch: 14 },
-        { wch: 14 },
-        { wch: 14 }
+        { wch: 15 },  // B: Name
+        { wch: 14 },  // C: Mon
+        { wch: 14 },  // D: Tue
+        { wch: 14 },  // E: Wed
+        { wch: 14 },  // F: Thu
+        { wch: 14 },  // G: Fri
+        { wch: 14 },  // H: Sat
+        { wch: 14 }   // I: Sun
       ];
+      
+      // 셀 병합 (직원 이름과 번호)
+      if (!ws['!merges']) ws['!merges'] = [];
+      
+      activeEmployees.forEach((emp, idx) => {
+        const lunchRowIdx = startRow + idx * 2 - 1; // Excel 1-indexed
+        const dinnerRowIdx = lunchRowIdx + 1;
+        
+        // 번호 병합 (A열)
+        ws['!merges'].push({
+          s: { r: lunchRowIdx, c: 0 },
+          e: { r: dinnerRowIdx, c: 0 }
+        });
+        
+        // 이름 병합 (B열)
+        ws['!merges'].push({
+          s: { r: lunchRowIdx, c: 1 },
+          e: { r: dinnerRowIdx, c: 1 }
+        });
+      });
       
       // 워크북에 추가
       XLSX.utils.book_append_sheet(wb, ws, 'Schedule');
@@ -1472,6 +1527,8 @@
       // 파일 다운로드
       const today = new Date().toISOString().split('T')[0];
       XLSX.writeFile(wb, `Shabu_Zone_Schedule_${today}.xlsx`);
+      
+      alert('✅ Excel file downloaded! Open it to see formulas that auto-update when you change shifts.');
     };
 
     // --- 가능한 직원 모달 닫기 ---
