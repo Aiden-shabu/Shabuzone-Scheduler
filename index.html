@@ -1491,9 +1491,6 @@
       const newSchedule = {};
       const activeEmployees = state.employees.filter(e => e.status === 'active');
 
-      // Holiday인 날들 찾기
-      const holidayDays = DAYS.filter(day => state.requirements[day].isHoliday);
-
       // 직원별 시프트 카운트 추적
       const employeeShiftCount = {};
       activeEmployees.forEach(emp => {
@@ -1517,26 +1514,20 @@
       // Shift 자동 선택 (유동성)
       const getFlexibleShift = (prefValue, period, needs) => {
         if (period === 'morning') {
-          // 🟡 노란색 (Open 선호)
           if (prefValue === 1) {
             if (needs.open > 0) return { shift: 'Open~Break', type: 'open' };
             if (needs.eleven > 0) return { shift: '11:00~Break', type: 'eleven' };
             if (needs.elevenThirty > 0) return { shift: '11:30~Break', type: 'elevenThirty' };
-          }
-          // 🟢 초록색 (11시 선호)
-          else if (prefValue === 2) {
+          } else if (prefValue === 2) {
             if (needs.eleven > 0) return { shift: '11:00~Break', type: 'eleven' };
             if (needs.elevenThirty > 0) return { shift: '11:30~Break', type: 'elevenThirty' };
             if (needs.open > 0) return { shift: 'Open~Break', type: 'open' };
           }
         } else if (period === 'evening') {
-          // 🔵 파란색 (3:30 선호)
           if (prefValue === 1) {
             if (needs.threeThirty > 0) return { shift: '3:30~Close', type: 'threeThirty' };
             if (needs.six > 0) return { shift: '6:00~Close', type: 'six' };
-          }
-          // 🟣 보라색 (6시만)
-          else if (prefValue === 2) {
+          } else if (prefValue === 2) {
             if (needs.six > 0) return { shift: '6:00~Close', type: 'six' };
             if (needs.threeThirty > 0) return { shift: '3:30~Close', type: 'threeThirty' };
           }
@@ -1556,7 +1547,7 @@
           dinner: []
         };
 
-        // Remaining needs (동적으로 감소)
+        // Remaining needs
         const remainingNeeds = {
           lunch: {
             open: req.lunch.open || 0,
@@ -1569,14 +1560,11 @@
           }
         };
 
-        const totalLunchNeed = remainingNeeds.lunch.open + remainingNeeds.lunch.eleven + remainingNeeds.lunch.elevenThirty;
-        const totalDinnerNeed = remainingNeeds.dinner.threeThirty + remainingNeeds.dinner.six;
-
         // 이미 배정된 직원 추적
         const assignedEmployees = new Set();
 
         // ========================================
-        // STEP 1: Fixed 시프트 배정 (무조건!)
+        // STEP 1: Fixed 시프트 배정 (최우선!)
         // ========================================
         activeEmployees.forEach(emp => {
           const prefs = state.preferences[emp.id]?.[day];
@@ -1615,10 +1603,11 @@
         });
 
         // ========================================
-        // STEP 2: Min Guarantee 부족한 사람 우선
+        // STEP 2: Min Guarantee > 0 부족한 사람 우선
         // ========================================
         const empWithMinGuarantee = activeEmployees
           .filter(emp => {
+            if (assignedEmployees.has(emp.id)) return false;
             const prefs = state.preferences[emp.id];
             const minGuarantee = prefs?.minGuarantee || 0;
             return minGuarantee > 0 && employeeShiftCount[emp.id] < minGuarantee;
@@ -1628,15 +1617,15 @@
             deficit: (state.preferences[emp.id]?.minGuarantee || 0) - employeeShiftCount[emp.id],
             prefs: state.preferences[emp.id]?.[day]
           }))
-          .sort((a, b) => b.deficit - a.deficit); // 부족한 순
+          .sort((a, b) => b.deficit - a.deficit);
 
         empWithMinGuarantee.forEach(({ emp, prefs }) => {
           if (!prefs) return;
 
-          // Morning (Fixed 아닌 것만)
+          // Morning
           if (prefs.morning > 0 && !prefs.morningFixed) {
             const total = remainingNeeds.lunch.open + remainingNeeds.lunch.eleven + remainingNeeds.lunch.elevenThirty;
-            if (total > 0) {
+            if (total > 0 && !assignedEmployees.has(emp.id)) {
               const result = getFlexibleShift(prefs.morning, 'morning', remainingNeeds.lunch);
               if (result) {
                 newSchedule[day].lunch.push({ 
@@ -1652,10 +1641,10 @@
             }
           }
 
-          // Evening (Fixed 아닌 것만)
+          // Evening
           if (prefs.evening > 0 && !prefs.eveningFixed) {
             const total = remainingNeeds.dinner.threeThirty + remainingNeeds.dinner.six;
-            if (total > 0) {
+            if (total > 0 && !assignedEmployees.has(emp.id)) {
               const result = getFlexibleShift(prefs.evening, 'evening', remainingNeeds.dinner);
               if (result) {
                 newSchedule[day].dinner.push({ 
@@ -1673,30 +1662,22 @@
         });
 
         // ========================================
-        // STEP 3: 랜덤 배정 (Fixed 없는 사람 우선)
+        // STEP 3: Min Guarantee = 0인 사람 랜덤 분배
         // ========================================
-        
-        // Fixed가 하나도 없는 사람
-        const noFixedEmployees = shuffle(activeEmployees.filter(emp => {
+        const empWithZeroGuarantee = shuffle(activeEmployees.filter(emp => {
           if (assignedEmployees.has(emp.id)) return false;
-          const allPrefs = state.preferences[emp.id];
-          if (!allPrefs) return true;
-          
-          // 모든 날짜 체크해서 Fixed가 하나라도 있으면 제외
-          const hasAnyFixed = DAYS.some(d => {
-            const dayPref = allPrefs[d];
-            return dayPref && (dayPref.morningFixed || dayPref.eveningFixed);
-          });
-          return !hasAnyFixed;
+          const prefs = state.preferences[emp.id];
+          const minGuarantee = prefs?.minGuarantee || 0;
+          return minGuarantee === 0;
         }));
 
-        // 랜덤 배정 - Fixed 없는 사람
-        noFixedEmployees.forEach(emp => {
+        empWithZeroGuarantee.forEach(emp => {
           const prefs = state.preferences[emp.id]?.[day];
-          
+          if (!prefs) return;
+
           // Morning
           const lunchTotal = remainingNeeds.lunch.open + remainingNeeds.lunch.eleven + remainingNeeds.lunch.elevenThirty;
-          if (lunchTotal > 0 && prefs?.morning > 0 && !prefs.morningFixed) {
+          if (lunchTotal > 0 && prefs.morning > 0 && !prefs.morningFixed && !assignedEmployees.has(emp.id)) {
             const result = getFlexibleShift(prefs.morning, 'morning', remainingNeeds.lunch);
             if (result) {
               newSchedule[day].lunch.push({ 
@@ -1713,7 +1694,7 @@
 
           // Evening
           const dinnerTotal = remainingNeeds.dinner.threeThirty + remainingNeeds.dinner.six;
-          if (dinnerTotal > 0 && prefs?.evening > 0 && !prefs.eveningFixed) {
+          if (dinnerTotal > 0 && prefs.evening > 0 && !prefs.eveningFixed && !assignedEmployees.has(emp.id)) {
             const result = getFlexibleShift(prefs.evening, 'evening', remainingNeeds.dinner);
             if (result) {
               newSchedule[day].dinner.push({ 
@@ -1730,7 +1711,7 @@
         });
 
         // ========================================
-        // STEP 4: 여전히 부족하면 Fixed 있는 사람도 랜덤
+        // STEP 4: 여전히 부족하면 나머지 사람들 랜덤
         // ========================================
         const remainingEmployees = shuffle(activeEmployees.filter(emp => !assignedEmployees.has(emp.id)));
 
@@ -1773,7 +1754,7 @@
         });
 
         // ========================================
-        // STEP 5: Holiday 처리
+        // STEP 5: Holiday 강제 배정
         // ========================================
         if (isHoliday) {
           const unassigned = shuffle(activeEmployees.filter(emp => !assignedEmployees.has(emp.id)));
@@ -1820,11 +1801,3 @@
       state.generating = false;
       render();
     };
-
-    // ============================================
-    // 앱 시작!
-    // ============================================
-    loadInitialData();
-  </script>
-</body>
-</html>
