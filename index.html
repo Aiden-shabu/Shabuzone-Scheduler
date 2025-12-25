@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Shabu Zone Schedule Manager</title>
   
-  <!-- SheetJS for Excel export -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <!-- ExcelJS for Excel export with full styling support -->
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   
   <!-- ============================================ -->
   <!-- CSS STYLES - 스타일 정의 -->
@@ -1577,143 +1578,482 @@
       document.body.insertAdjacentHTML('beforeend', modalHTML);
     };
     
-    // --- Excel 다운로드 ---
-    window.downloadExcel = () => {
-      if (!state.schedule || Object.keys(state.schedule).length === 0) {
-        alert('⚠️ No schedule generated yet! Please run schedule generation first.');
-        return;
-      }
+    // --- Excel 다운로드 (ExcelJS - 색상 지원!) ---
+    // Excel 다운로드 함수 (완전 수정버전)
+window.downloadExcel = async () => {
+  if (!state.schedule || Object.keys(state.schedule).length === 0) {
+    alert('⚠️ No schedule generated yet!');
+    return;
+  }
 
-      // 엑셀 데이터 준비
-      const wb = XLSX.utils.book_new();
-      
-      // 데이터 배열 생성
-      const data = [];
-      
-      // Header Row 1: "Schedule"
-      data.push(['Schedule']);
-      
-      // Header Row 2: Name + Days
-      const headerRow2 = ['', 'Name'];
-      DAYS.forEach(day => {
-        const t = TRANSLATIONS[state.language];
-        headerRow2.push(t.days?.[day] || day);
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Schedule');
+
+  const employeeOrder = [
+    'Aiden', 'Carlos', 'Edgar', 'Hung', 'Thanh', 'Tien', 'Tommy', 'Judy', 
+    'Justin', 'Tina N', 'Alan', 'Chau', 'Le', 'Crystal', 'Tue', 'Cherry', 
+    'Christine', 'Hieu', 'Kai', 'Dat', 'Johnny', 'Ly', 'Tho', 'Kha', 
+    'Phung', 'Ye', 'Esther', 'Duc', 'Jimmy', 'Aca', 'Vivi', 'Catherine', 
+    'Tiffany', 'Steven', 'Chris', 'Dung'
+  ];
+
+  const orderedEmployees = [];
+  employeeOrder.forEach(name => {
+    const emp = state.employees.find(e => e.name === name && e.status === 'active');
+    if (emp) orderedEmployees.push(emp);
+  });
+
+  // 열 너비
+  const columns = [{ width: 5 }, { width: 12 }];
+  DAYS.forEach(() => {
+    columns.push({ width: 14 });
+    columns.push({ width: 14 });
+  });
+  worksheet.columns = columns;
+
+  // Row 1: Schedule 제목
+  const totalCols = 2 + DAYS.length * 2;
+  const lastCol = String.fromCharCode(65 + totalCols - 1);
+  worksheet.mergeCells(\`A1:\${lastCol}1\`);
+  const titleCell = worksheet.getCell('A1');
+  titleCell.value = 'Schedule';
+  titleCell.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF667eea' } };
+
+  // Row 2: 요일
+  const dayHeaderRow = worksheet.getRow(2);
+  dayHeaderRow.values = ['', 'Name', ...DAYS.flatMap(day => [day, ''])];
+  
+  let colIndex = 3;
+  DAYS.forEach(() => {
+    const col1 = String.fromCharCode(64 + colIndex);
+    const col2 = String.fromCharCode(64 + colIndex + 1);
+    worksheet.mergeCells(\`\${col1}2:\${col2}2\`);
+    colIndex += 2;
+  });
+
+  dayHeaderRow.eachCell((cell) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF667eea' } };
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  });
+
+  // Row 3: Lunch/Dinner
+  const shiftHeaderRow = worksheet.getRow(3);
+  shiftHeaderRow.values = ['', '', ...DAYS.flatMap(() => ['Lunch', 'Dinner'])];
+  shiftHeaderRow.eachCell((cell) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF9D4EDD' } };
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  });
+
+  let currentRow = 4;
+
+  // 직원 데이터
+  orderedEmployees.forEach((emp, idx) => {
+    const empRow = worksheet.getRow(currentRow);
+    const rowData = [idx + 1, emp.name];
+    
+    DAYS.forEach(day => {
+      const daySchedule = state.schedule[day] || {};
+      const lunchShift = (daySchedule.lunch || []).find(e => e.id === emp.id);
+      const dinnerShift = (daySchedule.dinner || []).find(e => e.id === emp.id);
+      rowData.push(lunchShift ? lunchShift.shift : '');
+      rowData.push(dinnerShift ? dinnerShift.shift : '');
+    });
+    
+    empRow.values = rowData;
+
+    // 스타일
+    empRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+    empRow.getCell(1).font = { bold: true };
+    empRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    empRow.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F9F9' } };
+    empRow.getCell(2).font = { bold: true };
+    empRow.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' };
+
+    let cellIdx = 3;
+    DAYS.forEach(day => {
+      const daySchedule = state.schedule[day] || {};
+      const lunchShift = (daySchedule.lunch || []).find(e => e.id === emp.id);
+      const dinnerShift = (daySchedule.dinner || []).find(e => e.id === emp.id);
+
+      const lunchCell = empRow.getCell(cellIdx);
+      if (lunchShift) {
+        lunchCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: getShiftColorARGB(lunchShift.shift) } };
+        lunchCell.font = { bold: true, size: 9 };
+      }
+      lunchCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cellIdx++;
+
+      const dinnerCell = empRow.getCell(cellIdx);
+      if (dinnerShift) {
+        dinnerCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: getShiftColorARGB(dinnerShift.shift) } };
+        dinnerCell.font = { bold: true, size: 9 };
+      }
+      dinnerCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cellIdx++;
+    });
+
+    currentRow++;
+  });
+
+  // Counts
+  currentRow++;
+  
+  const lunchCountRow = worksheet.getRow(currentRow);
+  lunchCountRow.getCell(2).value = 'Lunch Count:';
+  worksheet.mergeCells(\`A\${currentRow}:B\${currentRow}\`);
+  lunchCountRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } };
+  lunchCountRow.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+  
+  let cellIdx = 3;
+  DAYS.forEach(day => {
+    const daySchedule = state.schedule[day] || {};
+    const lunchCell = lunchCountRow.getCell(cellIdx);
+    lunchCell.value = (daySchedule.lunch || []).length;
+    lunchCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } };
+    lunchCell.font = { bold: true, color: { argb: 'FF2E7D32' } };
+    lunchCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    
+    cellIdx += 2;
+  });
+
+  currentRow++;
+  
+  const dinnerCountRow = worksheet.getRow(currentRow);
+  dinnerCountRow.getCell(2).value = 'Dinner Count:';
+  worksheet.mergeCells(\`A\${currentRow}:B\${currentRow}\`);
+  dinnerCountRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE3F2FD' } };
+  dinnerCountRow.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+  
+  cellIdx = 4;
+  DAYS.forEach(day => {
+    const daySchedule = state.schedule[day] || {};
+    const dinnerCell = dinnerCountRow.getCell(cellIdx);
+    dinnerCell.value = (daySchedule.dinner || []).length;
+    dinnerCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE3F2FD' } };
+    dinnerCell.font = { bold: true, color: { argb: 'FF1565C0' } };
+    dinnerCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    
+    cellIdx += 2;
+  });
+
+  currentRow++;
+  
+  const allDayCountRow = worksheet.getRow(currentRow);
+  allDayCountRow.getCell(2).value = 'All Day Count:';
+  worksheet.mergeCells(\`A\${currentRow}:B\${currentRow}\`);
+  allDayCountRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF3E0' } };
+  allDayCountRow.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+  
+  cellIdx = 3;
+  DAYS.forEach(day => {
+    const daySchedule = state.schedule[day] || {};
+    const lunchNames = (daySchedule.lunch || []).map(e => e.name);
+    const dinnerNames = (daySchedule.dinner || []).map(e => e.name);
+    const allDayCount = lunchNames.filter(name => dinnerNames.includes(name)).length;
+    
+    worksheet.mergeCells(\`\${String.fromCharCode(64 + cellIdx)}\${currentRow}:\${String.fromCharCode(64 + cellIdx + 1)}\${currentRow}\`);
+    const allDayCell = allDayCountRow.getCell(cellIdx);
+    allDayCell.value = allDayCount;
+    allDayCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF3E0' } };
+    allDayCell.font = { bold: true, color: { argb: 'FFF57C00' } };
+    allDayCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    
+    cellIdx += 2;
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const today = new Date().toISOString().split('T')[0];
+  saveAs(blob, \`Shabu_Zone_Schedule_\${today}.xlsx\`);
+  
+  alert('✅ Excel downloaded with colors!');
+};
+
+
+
+      titleCell.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+
+      // Row 2: 헤더 (# | Name | Days)
+      const headerRow = worksheet.getRow(2);
+      headerRow.values = ['#', 'Name', ...DAYS];
+      headerRow.height = 25;
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF667eea' }
+        };
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = {
+          top: { style: 'thick', color: { argb: 'FF000000' } },
+          left: { style: 'thick', color: { argb: 'FF000000' } },
+          bottom: { style: 'thick', color: { argb: 'FF000000' } },
+          right: { style: 'thick', color: { argb: 'FF000000' } }
+        };
       });
-      data.push(headerRow2);
-      
-      // Header Row 3: Short day names
-      const headerRow3 = ['', ''];
-      DAYS.forEach(day => {
-        headerRow3.push(day.substring(0, 3));
-      });
-      data.push(headerRow3);
-      
+
+      let currentRow = 3;
+
       // 직원 데이터
-      const activeEmployees = state.employees.filter(e => e.status === 'active');
-      let rowNum = 1;
-      const startRow = 4; // 데이터 시작 행 (Excel 1-indexed)
-      
-      activeEmployees.forEach(emp => {
-        // Lunch row
-        const lunchRow = [rowNum, emp.name];
-        DAYS.forEach(day => {
+      orderedEmployees.forEach((emp, idx) => {
+        // Lunch Row
+        const lunchRow = worksheet.getRow(currentRow);
+        lunchRow.height = 20;
+        lunchRow.getCell(1).value = idx + 1;
+        lunchRow.getCell(2).value = emp.name + '\nLunch';
+
+        // 번호와 이름 병합 (Lunch + Dinner)
+        worksheet.mergeCells(`A${currentRow}:A${currentRow + 1}`);
+        worksheet.mergeCells(`B${currentRow}:B${currentRow + 1}`);
+
+        // 번호 셀 스타일
+        const numCell = lunchRow.getCell(1);
+        numCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF0F0F0' }
+        };
+        numCell.font = { bold: true, size: 11 };
+        numCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        numCell.border = {
+          top: { style: 'thick' },
+          left: { style: 'thick' },
+          bottom: { style: 'thick' },
+          right: { style: 'thick' }
+        };
+
+        // 이름 셀 스타일
+        const nameCell = lunchRow.getCell(2);
+        nameCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF9F9F9' }
+        };
+        nameCell.font = { bold: true, size: 11 };
+        nameCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        nameCell.border = {
+          top: { style: 'thick' },
+          left: { style: 'thick' },
+          bottom: { style: 'thick' },
+          right: { style: 'thick' }
+        };
+
+        // Lunch 시프트
+        DAYS.forEach((day, dayIdx) => {
           const daySchedule = state.schedule[day] || {};
           const lunchShift = (daySchedule.lunch || []).find(e => e.id === emp.id);
-          lunchRow.push(lunchShift ? lunchShift.shift : '');
+          const cell = lunchRow.getCell(3 + dayIdx);
+          cell.value = lunchShift ? lunchShift.shift : '';
+          
+          if (lunchShift) {
+            const bgColor = getShiftColorARGB(lunchShift.shift);
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: bgColor }
+            };
+            cell.font = { bold: true, size: 10 };
+          }
+          
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.border = {
+            top: { style: 'thick' },
+            left: { style: 'thick' },
+            bottom: { style: 'medium' },
+            right: { style: 'thick' }
+          };
         });
-        data.push(lunchRow);
-        
-        // Dinner row
-        const dinnerRow = ['', ''];
-        DAYS.forEach(day => {
+
+        currentRow++;
+
+        // Dinner Row
+        const dinnerRow = worksheet.getRow(currentRow);
+        dinnerRow.height = 20;
+
+        DAYS.forEach((day, dayIdx) => {
           const daySchedule = state.schedule[day] || {};
           const dinnerShift = (daySchedule.dinner || []).find(e => e.id === emp.id);
-          dinnerRow.push(dinnerShift ? dinnerShift.shift : '');
+          const cell = dinnerRow.getCell(3 + dayIdx);
+          cell.value = dinnerShift ? dinnerShift.shift : '';
+          
+          if (dinnerShift) {
+            const bgColor = getShiftColorARGB(dinnerShift.shift);
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: bgColor }
+            };
+            cell.font = { bold: true, size: 10 };
+          }
+          
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.border = {
+            top: { style: 'medium' },
+            left: { style: 'thick' },
+            bottom: { style: 'thick' },
+            right: { style: 'thick' }
+          };
         });
-        data.push(dinnerRow);
-        
-        rowNum++;
+
+        currentRow++;
       });
-      
+
       // 빈 줄
-      data.push([]);
+      currentRow++;
+
+      // Lunch Count
+      const lunchCountRow = worksheet.getRow(currentRow);
+      lunchCountRow.getCell(1).value = '';
+      lunchCountRow.getCell(2).value = 'Lunch Count:';
+      worksheet.mergeCells(`A${currentRow}:B${currentRow}`);
       
-      // Summary section
-      const summaryStartRow = data.length + 1;
-      
-      // Lunch Count row
-      const lunchCountRow = ['', 'Lunch Count:'];
-      DAYS.forEach((day, idx) => {
-        const col = String.fromCharCode(67 + idx); // C, D, E, ...
-        const formula = `=COUNTIF(${col}${startRow}:${col}${startRow + activeEmployees.length * 2 - 2},"<>""")`;
-        lunchCountRow.push(formula);
+      const lunchLabelCell = lunchCountRow.getCell(1);
+      lunchLabelCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE8F5E9' }
+      };
+      lunchLabelCell.font = { bold: true, size: 11 };
+      lunchLabelCell.alignment = { horizontal: 'right', vertical: 'middle' };
+      lunchLabelCell.border = {
+        top: { style: 'thick' },
+        left: { style: 'thick' },
+        bottom: { style: 'thick' },
+        right: { style: 'thick' }
+      };
+
+      DAYS.forEach((day, dayIdx) => {
+        const daySchedule = state.schedule[day] || {};
+        const lunchCount = (daySchedule.lunch || []).length;
+        const cell = lunchCountRow.getCell(3 + dayIdx);
+        cell.value = lunchCount;
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE8F5E9' }
+        };
+        cell.font = { bold: true, size: 11, color: { argb: 'FF2E7D32' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = {
+          top: { style: 'thick' },
+          left: { style: 'thick' },
+          bottom: { style: 'thick' },
+          right: { style: 'thick' }
+        };
       });
-      data.push(lunchCountRow);
+
+      currentRow++;
+
+      // Dinner Count
+      const dinnerCountRow = worksheet.getRow(currentRow);
+      dinnerCountRow.getCell(1).value = '';
+      dinnerCountRow.getCell(2).value = 'Dinner Count:';
+      worksheet.mergeCells(`A${currentRow}:B${currentRow}`);
       
-      // Dinner Count row
-      const dinnerCountRow = ['', 'Dinner Count:'];
-      DAYS.forEach((day, idx) => {
-        const col = String.fromCharCode(67 + idx);
-        const formula = `=COUNTIF(${col}${startRow + 1}:${col}${startRow + activeEmployees.length * 2 - 1},"<>""")`;
-        dinnerCountRow.push(formula);
+      const dinnerLabelCell = dinnerCountRow.getCell(1);
+      dinnerLabelCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE3F2FD' }
+      };
+      dinnerLabelCell.font = { bold: true, size: 11 };
+      dinnerLabelCell.alignment = { horizontal: 'right', vertical: 'middle' };
+      dinnerLabelCell.border = {
+        top: { style: 'thick' },
+        left: { style: 'thick' },
+        bottom: { style: 'thick' },
+        right: { style: 'thick' }
+      };
+
+      DAYS.forEach((day, dayIdx) => {
+        const daySchedule = state.schedule[day] || {};
+        const dinnerCount = (daySchedule.dinner || []).length;
+        const cell = dinnerCountRow.getCell(3 + dayIdx);
+        cell.value = dinnerCount;
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE3F2FD' }
+        };
+        cell.font = { bold: true, size: 11, color: { argb: 'FF1565C0' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = {
+          top: { style: 'thick' },
+          left: { style: 'thick' },
+          bottom: { style: 'thick' },
+          right: { style: 'thick' }
+        };
       });
-      data.push(dinnerCountRow);
+
+      currentRow++;
+
+      // All Day Count
+      const allDayCountRow = worksheet.getRow(currentRow);
+      allDayCountRow.getCell(1).value = '';
+      allDayCountRow.getCell(2).value = 'All Day Count:';
+      worksheet.mergeCells(`A${currentRow}:B${currentRow}`);
       
-      // All Day Count row
-      const allDayCountRow = ['', 'All Day Count:'];
-      DAYS.forEach((day, idx) => {
-        const col = String.fromCharCode(67 + idx);
-        // Count people who have both lunch AND dinner on same day
-        const formula = `=SUMPRODUCT((${col}${startRow}:${col}${startRow + activeEmployees.length * 2 - 2}<>"")*(${col}${startRow + 1}:${col}${startRow + activeEmployees.length * 2 - 1}<>"")/2)`;
-        allDayCountRow.push(formula);
+      const allDayLabelCell = allDayCountRow.getCell(1);
+      allDayLabelCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFFF3E0' }
+      };
+      allDayLabelCell.font = { bold: true, size: 11 };
+      allDayLabelCell.alignment = { horizontal: 'right', vertical: 'middle' };
+      allDayLabelCell.border = {
+        top: { style: 'thick' },
+        left: { style: 'thick' },
+        bottom: { style: 'thick' },
+        right: { style: 'thick' }
+      };
+
+      DAYS.forEach((day, dayIdx) => {
+        const daySchedule = state.schedule[day] || {};
+        const lunchNames = (daySchedule.lunch || []).map(e => e.name);
+        const dinnerNames = (daySchedule.dinner || []).map(e => e.name);
+        const allDayCount = lunchNames.filter(name => dinnerNames.includes(name)).length;
+        const cell = allDayCountRow.getCell(3 + dayIdx);
+        cell.value = allDayCount;
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFF3E0' }
+        };
+        cell.font = { bold: true, size: 11, color: { argb: 'FFF57C00' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = {
+          top: { style: 'thick' },
+          left: { style: 'thick' },
+          bottom: { style: 'thick' },
+          right: { style: 'thick' }
+        };
       });
-      data.push(allDayCountRow);
-      
-      // 워크시트 생성
-      const ws = XLSX.utils.aoa_to_sheet(data);
-      
-      // 열 너비 설정
-      ws['!cols'] = [
-        { wch: 5 },   // A: Number
-        { wch: 15 },  // B: Name
-        { wch: 14 },  // C: Mon
-        { wch: 14 },  // D: Tue
-        { wch: 14 },  // E: Wed
-        { wch: 14 },  // F: Thu
-        { wch: 14 },  // G: Fri
-        { wch: 14 },  // H: Sat
-        { wch: 14 }   // I: Sun
-      ];
-      
-      // 셀 병합 (직원 이름과 번호)
-      if (!ws['!merges']) ws['!merges'] = [];
-      
-      activeEmployees.forEach((emp, idx) => {
-        const lunchRowIdx = startRow + idx * 2 - 1; // Excel 1-indexed
-        const dinnerRowIdx = lunchRowIdx + 1;
-        
-        // 번호 병합 (A열)
-        ws['!merges'].push({
-          s: { r: lunchRowIdx, c: 0 },
-          e: { r: dinnerRowIdx, c: 0 }
-        });
-        
-        // 이름 병합 (B열)
-        ws['!merges'].push({
-          s: { r: lunchRowIdx, c: 1 },
-          e: { r: dinnerRowIdx, c: 1 }
-        });
-      });
-      
-      // 워크북에 추가
-      XLSX.utils.book_append_sheet(wb, ws, 'Schedule');
-      
-      // 파일 다운로드
+
+      // 파일 생성 및 다운로드
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const today = new Date().toISOString().split('T')[0];
-      XLSX.writeFile(wb, `Shabu_Zone_Schedule_${today}.xlsx`);
+      saveAs(blob, `Shabu_Zone_Schedule_${today}.xlsx`);
       
-      alert('✅ Excel file downloaded! Open it to see formulas that auto-update when you change shifts.');
+      alert('✅ Excel file downloaded with full colors and styling!');
     };
+
+    // 시프트 색상 ARGB 반환 (ExcelJS용)
+    function getShiftColorARGB(shift) {
+      if (!shift) return 'FFFFFFFF';
+      if (shift.includes('Open')) return 'FFFFD93D';  // 🟡 노란색
+      if (shift.includes('11:00') || shift.includes('11:30')) return 'FF6BCB77';  // 🟢 초록색
+      if (shift.includes('3:30')) return 'FF4D96FF';  // 🔵 파란색
+      if (shift.includes('6:00') || shift.includes('6 PM')) return 'FF9D4EDD';  // 🟣 보라색
+      return 'FFFFFFFF';
+    }
 
     // --- 시프트 편집 (Excel View) ---
     window.editShift = (empId, day, period) => {
