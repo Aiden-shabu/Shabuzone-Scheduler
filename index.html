@@ -686,7 +686,7 @@
     function renderTabs(t) {
       return `
         <div class="tabs">
-          ${['employees', 'requirements', 'preferences', 'schedule', 'sections'].map(tab => `
+          ${['employees', 'requirements', 'preferences', 'schedule', 'excelView', 'sections'].map(tab => `
             <button class="tab ${state.activeTab === tab ? 'active' : ''}" data-tab="${tab}">
               ${t.tabs[tab]}
             </button>
