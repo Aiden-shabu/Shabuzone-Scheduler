@@ -967,14 +967,9 @@
       return `
         <div style="display:flex;justify-content:space-between;margin-bottom:24px;">
           <h2 style="margin:0;font-size:24px;font-weight:600;">${t.schedule.title}</h2>
-          <div style="display:flex;gap:12px;">
-            <button class="btn-secondary" onclick="downloadExcel()" style="display:inline-flex;align-items:center;gap:8px;">
-              📥 Download Excel
-            </button>
-            <button class="btn-primary" onclick="runScheduleGeneration()" ${state.generating ? 'disabled' : ''}>
-              ${state.generating ? '⏳' : '▶️'} ${state.generating ? t.schedule.generating : t.schedule.runSchedule}
-            </button>
-          </div>
+          <button class="btn-primary" onclick="runScheduleGeneration()" ${state.generating ? 'disabled' : ''}>
+            ${state.generating ? '⏳' : '▶️'} ${state.generating ? t.schedule.generating : t.schedule.runSchedule}
+          </button>
         </div>
 
         ${!hasSchedule ? `
@@ -1161,7 +1156,12 @@
 
       return `
         <div>
-          <h2 style="margin:0 0 16px 0;font-size:24px;font-weight:600;">${t.excelView.title}</h2>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h2 style="margin:0;font-size:24px;font-weight:600;">${t.excelView.title}</h2>
+            <button onclick="downloadExcel()" class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;">
+              📥 Download Excel
+            </button>
+          </div>
           
           <div style="overflow-x:auto;max-height:calc(100vh - 200px);border:3px solid #333;border-radius:8px;">
             <table style="width:100%;border-collapse:collapse;background:white;font-size:13px;">
@@ -1581,13 +1581,21 @@
     // --- Excel 다운로드 ---
     // --- Excel 다운로드 (ExcelJS - 색상 완벽 지원!) ---
     window.downloadExcel = async () => {
+      // ExcelJS 로드 확인
+      if (typeof ExcelJS === 'undefined') {
+        alert('❌ ExcelJS library not loaded! Please refresh the page.');
+        console.error('ExcelJS is not loaded');
+        return;
+      }
+      
       if (!state.schedule || Object.keys(state.schedule).length === 0) {
         alert('⚠️ No schedule yet! Run schedule first.');
         return;
       }
 
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Schedule');
+      try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Schedule');
 
       const employeeOrder = ['Aiden','Carlos','Edgar','Hung','Thanh','Tien','Tommy','Judy','Justin','Tina N','Alan','Chau','Le','Crystal','Tue','Cherry','Christine','Hieu','Kai','Dat','Johnny','Ly','Tho','Kha','Phung','Ye','Esther','Duc','Jimmy','Aca','Vivi','Catherine','Tiffany','Steven','Chris','Dung'];
       
@@ -1735,6 +1743,11 @@
       const today = new Date().toISOString().split('T')[0];
       saveAs(blob,'Shabu_Zone_Schedule_'+today+'.xlsx');
       alert('✅ Excel downloaded with colors!');
+      
+      } catch (error) {
+        console.error('Excel download error:', error);
+        alert('❌ Error downloading Excel: ' + error.message);
+      }
     };
 
 
