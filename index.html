@@ -1288,6 +1288,16 @@
       return '#ffffff';
     }
 
+    // 시프트 색상 ARGB 반환 (ExcelJS용)
+    function getShiftColorARGB(shift) {
+      if (!shift) return 'FFFFFFFF';
+      if (shift.includes('Open')) return 'FFFFD93D';  // 🟡 노란색
+      if (shift.includes('11:00') || shift.includes('11:30')) return 'FF6BCB77';  // 🟢 초록색
+      if (shift.includes('3:30')) return 'FF4D96FF';  // 🔵 파란색
+      if (shift.includes('6:00') || shift.includes('6 PM')) return 'FF9D4EDD';  // 🟣 보라색
+      return 'FFFFFFFF';
+    }
+
     // SECTIONS TAB - 섹션 탭
     // ============================================
     function renderSectionsTab(t) {
