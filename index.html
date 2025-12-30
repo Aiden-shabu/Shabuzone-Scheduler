@@ -1590,7 +1590,7 @@
     
     // --- Excel 다운로드 ---
     // --- Excel 다운로드 (ExcelJS - 색상 완벽 지원!) ---
-        window.downloadExcel = async () => {
+            window.downloadExcel = async () => {
       if (typeof ExcelJS === 'undefined') {
         alert('❌ ExcelJS library not loaded!');
         return;
@@ -1607,7 +1607,6 @@
     
         const employeeOrder = ['Aiden','Carlos','Edgar','Hung','Thanh','Tien','Tommy','Judy','Justin','Tina N','Alan','Chau','Le','Crystal','Tue','Cherry','Christine','Hieu','Kai','Dat','Johnny','Ly','Tho','Kha','Phung','Ye','Esther','Duc','Jimmy','Aca','Vivi','Catherine','Tiffany','Steven','Chris','Dung'];
         
-        // 모든 활성 직원 포함
         const orderedEmployees = [];
         employeeOrder.forEach(name => {
           const emp = state.employees.find(e => e.name === name && e.status === 'active');
@@ -1619,11 +1618,13 @@
           }
         });
     
-        const columns = [{width:5},{width:12}];
-        DAYS.forEach(() => { columns.push({width:14}); columns.push({width:14}); });
+        // 열 너비: # | Name | Day1 | Day2 | ...
+        const columns = [{width:5},{width:15}];
+        DAYS.forEach(() => columns.push({width:14}));
         worksheet.columns = columns;
     
-        const totalCols = 2 + DAYS.length * 2;
+        // Row 1: Schedule 제목
+        const totalCols = 2 + DAYS.length;
         const lastCol = String.fromCharCode(65 + totalCols - 1);
         worksheet.mergeCells('A1:' + lastCol + '1');
         const titleCell = worksheet.getCell('A1');
@@ -1633,15 +1634,10 @@
         titleCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF667eea'}};
         titleCell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
     
+        // Row 2: # | Name | Day headers
         const dayHeaderRow = worksheet.getRow(2);
-        dayHeaderRow.values = ['','Name',...DAYS.flatMap(day=>[day,''])];
-        let colIndex = 3;
-        DAYS.forEach(() => {
-          const col1 = String.fromCharCode(64+colIndex);
-          const col2 = String.fromCharCode(64+colIndex+1);
-          worksheet.mergeCells(col1+'2:'+col2+'2');
-          colIndex += 2;
-        });
+        dayHeaderRow.height = 20;
+        dayHeaderRow.values = ['','Name',...DAYS];
         dayHeaderRow.eachCell((cell)=>{
           cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF667eea'}};
           cell.font = {bold:true,color:{argb:'FFFFFFFF'},size:11};
@@ -1649,9 +1645,11 @@
           cell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
         });
     
-        const shiftHeaderRow = worksheet.getRow(3);
-        shiftHeaderRow.values = ['','',...DAYS.flatMap(()=>['Lunch','Dinner'])];
-        shiftHeaderRow.eachCell((cell,idx)=>{
+        // Row 3: Day short names (Mon, Tue, ...)
+        const shortDayRow = worksheet.getRow(3);
+        shortDayRow.height = 18;
+        shortDayRow.values = ['','', ...DAYS.map(d=>d.substring(0,3))];
+        shortDayRow.eachCell((cell)=>{
           cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF9D4EDD'}};
           cell.font = {bold:true,color:{argb:'FFFFFFFF'},size:10};
           cell.alignment = {horizontal:'center',vertical:'middle'};
@@ -1660,56 +1658,81 @@
     
         let currentRow = 4;
         orderedEmployees.forEach((emp,idx)=>{
-          const empRow = worksheet.getRow(currentRow);
-          empRow.height = 20;
-          const rowData = [idx+1,emp.name];
+          // Lunch Row
+          const lunchRow = worksheet.getRow(currentRow);
+          lunchRow.height = 18;
+          const lunchData = [idx+1,emp.name];
           DAYS.forEach(day=>{
             const daySchedule = state.schedule[day]||{};
             const lunchShift = (daySchedule.lunch||[]).find(e=>e.id===emp.id);
-            const dinnerShift = (daySchedule.dinner||[]).find(e=>e.id===emp.id);
-            rowData.push(lunchShift?lunchShift.shift:'');
-            rowData.push(dinnerShift?dinnerShift.shift:'');
+            lunchData.push(lunchShift?lunchShift.shift:'');
           });
-          empRow.values = rowData;
-          
-          empRow.getCell(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F0F0'}};
-          empRow.getCell(1).font = {bold:true,size:10};
-          empRow.getCell(1).alignment = {horizontal:'center',vertical:'middle'};
-          empRow.getCell(1).border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
-          
-          empRow.getCell(2).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF9F9F9'}};
-          empRow.getCell(2).font = {bold:true,size:10};
-          empRow.getCell(2).alignment = {horizontal:'left',vertical:'middle'};
-          empRow.getCell(2).border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
+          lunchRow.values = lunchData;
     
-          let cellIdx = 3;
-          DAYS.forEach(day=>{
+          // 번호 셀 (Lunch + Dinner 병합)
+          worksheet.mergeCells('A'+currentRow+':A'+(currentRow+1));
+          const numCell = lunchRow.getCell(1);
+          numCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F0F0'}};
+          numCell.font = {bold:true,size:10};
+          numCell.alignment = {horizontal:'center',vertical:'middle'};
+          numCell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
+    
+          // 이름 셀 (Lunch + Dinner 병합)
+          worksheet.mergeCells('B'+currentRow+':B'+(currentRow+1));
+          const nameCell = lunchRow.getCell(2);
+          nameCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF9F9F9'}};
+          nameCell.font = {bold:true,size:10};
+          nameCell.alignment = {horizontal:'center',vertical:'middle'};
+          nameCell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
+    
+          // Lunch 셀 스타일
+          for(let i=0; i<DAYS.length; i++){
+            const day = DAYS[i];
             const daySchedule = state.schedule[day]||{};
             const lunchShift = (daySchedule.lunch||[]).find(e=>e.id===emp.id);
-            const dinnerShift = (daySchedule.dinner||[]).find(e=>e.id===emp.id);
-            
-            const lunchCell = empRow.getCell(cellIdx);
+            const cell = lunchRow.getCell(3+i);
             if(lunchShift){
-              lunchCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:getShiftColorARGB(lunchShift.shift)}};
-              lunchCell.font = {bold:true,size:9};
+              cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:getShiftColorARGB(lunchShift.shift)}};
+              cell.font = {bold:true,size:9};
             }
-            lunchCell.alignment = {horizontal:'center',vertical:'middle'};
-            lunchCell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'medium'},right:{style:'medium'}};
-            cellIdx++;
-            
-            const dinnerCell = empRow.getCell(cellIdx);
-            if(dinnerShift){
-              dinnerCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:getShiftColorARGB(dinnerShift.shift)}};
-              dinnerCell.font = {bold:true,size:9};
-            }
-            dinnerCell.alignment = {horizontal:'center',vertical:'middle'};
-            dinnerCell.border = {top:{style:'medium'},left:{style:'medium'},bottom:{style:'thick'},right:{style:'thick'}};
-            cellIdx++;
+            cell.alignment = {horizontal:'center',vertical:'middle'};
+            cell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'medium'},right:{style:'thick'}};
+          }
+    
+          currentRow++;
+    
+          // Dinner Row
+          const dinnerRow = worksheet.getRow(currentRow);
+          dinnerRow.height = 18;
+          const dinnerData = ['',''];
+          DAYS.forEach(day=>{
+            const daySchedule = state.schedule[day]||{};
+            const dinnerShift = (daySchedule.dinner||[]).find(e=>e.id===emp.id);
+            dinnerData.push(dinnerShift?dinnerShift.shift:'');
           });
+          dinnerRow.values = dinnerData;
+    
+          // Dinner 셀 스타일
+          for(let i=0; i<DAYS.length; i++){
+            const day = DAYS[i];
+            const daySchedule = state.schedule[day]||{};
+            const dinnerShift = (daySchedule.dinner||[]).find(e=>e.id===emp.id);
+            const cell = dinnerRow.getCell(3+i);
+            if(dinnerShift){
+              cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:getShiftColorARGB(dinnerShift.shift)}};
+              cell.font = {bold:true,size:9};
+            }
+            cell.alignment = {horizontal:'center',vertical:'middle'};
+            cell.border = {top:{style:'medium'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
+          }
+    
           currentRow++;
         });
     
+        // 빈 줄
         currentRow++;
+    
+        // Lunch Count
         const lunchCountRow = worksheet.getRow(currentRow);
         lunchCountRow.height = 22;
         lunchCountRow.getCell(2).value = 'Lunch Count:';
@@ -1719,19 +1742,20 @@
         lunchCountRow.getCell(1).alignment = {horizontal:'right',vertical:'middle'};
         lunchCountRow.getCell(1).border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
         
-        let cellIdx = 3;
-        DAYS.forEach(day=>{
+        for(let i=0; i<DAYS.length; i++){
+          const day = DAYS[i];
           const daySchedule = state.schedule[day]||{};
-          const lunchCell = lunchCountRow.getCell(cellIdx);
-          lunchCell.value = (daySchedule.lunch||[]).length;
-          lunchCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFE8F5E9'}};
-          lunchCell.font = {bold:true,size:11,color:{argb:'FF2E7D32'}};
-          lunchCell.alignment = {horizontal:'center',vertical:'middle'};
-          lunchCell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
-          cellIdx += 2;
-        });
+          const cell = lunchCountRow.getCell(3+i);
+          cell.value = (daySchedule.lunch||[]).length;
+          cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFE8F5E9'}};
+          cell.font = {bold:true,size:11,color:{argb:'FF2E7D32'}};
+          cell.alignment = {horizontal:'center',vertical:'middle'};
+          cell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
+        }
     
         currentRow++;
+    
+        // Dinner Count
         const dinnerCountRow = worksheet.getRow(currentRow);
         dinnerCountRow.height = 22;
         dinnerCountRow.getCell(2).value = 'Dinner Count:';
@@ -1741,19 +1765,20 @@
         dinnerCountRow.getCell(1).alignment = {horizontal:'right',vertical:'middle'};
         dinnerCountRow.getCell(1).border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
         
-        cellIdx = 4;
-        DAYS.forEach(day=>{
+        for(let i=0; i<DAYS.length; i++){
+          const day = DAYS[i];
           const daySchedule = state.schedule[day]||{};
-          const dinnerCell = dinnerCountRow.getCell(cellIdx);
-          dinnerCell.value = (daySchedule.dinner||[]).length;
-          dinnerCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFE3F2FD'}};
-          dinnerCell.font = {bold:true,size:11,color:{argb:'FF1565C0'}};
-          dinnerCell.alignment = {horizontal:'center',vertical:'middle'};
-          dinnerCell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
-          cellIdx += 2;
-        });
+          const cell = dinnerCountRow.getCell(3+i);
+          cell.value = (daySchedule.dinner||[]).length;
+          cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFE3F2FD'}};
+          cell.font = {bold:true,size:11,color:{argb:'FF1565C0'}};
+          cell.alignment = {horizontal:'center',vertical:'middle'};
+          cell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
+        }
     
         currentRow++;
+    
+        // All Day Count
         const allDayCountRow = worksheet.getRow(currentRow);
         allDayCountRow.height = 22;
         allDayCountRow.getCell(2).value = 'All Day Count:';
@@ -1763,21 +1788,19 @@
         allDayCountRow.getCell(1).alignment = {horizontal:'right',vertical:'middle'};
         allDayCountRow.getCell(1).border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
         
-        cellIdx = 3;
-        DAYS.forEach(day=>{
+        for(let i=0; i<DAYS.length; i++){
+          const day = DAYS[i];
           const daySchedule = state.schedule[day]||{};
           const lunchNames = (daySchedule.lunch||[]).map(e=>e.name);
           const dinnerNames = (daySchedule.dinner||[]).map(e=>e.name);
           const allDayCount = lunchNames.filter(name=>dinnerNames.includes(name)).length;
-          worksheet.mergeCells(String.fromCharCode(64+cellIdx)+currentRow+':'+String.fromCharCode(64+cellIdx+1)+currentRow);
-          const allDayCell = allDayCountRow.getCell(cellIdx);
-          allDayCell.value = allDayCount;
-          allDayCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF3E0'}};
-          allDayCell.font = {bold:true,size:11,color:{argb:'FFF57C00'}};
-          allDayCell.alignment = {horizontal:'center',vertical:'middle'};
-          allDayCell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
-          cellIdx += 2;
-        });
+          const cell = allDayCountRow.getCell(3+i);
+          cell.value = allDayCount;
+          cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF3E0'}};
+          cell.font = {bold:true,size:11,color:{argb:'FFF57C00'}};
+          cell.alignment = {horizontal:'center',vertical:'middle'};
+          cell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
+        }
     
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -1790,6 +1813,9 @@
         alert('❌ Error downloading Excel: ' + error.message);
       }
     };
+    
+
+
     
 
 
