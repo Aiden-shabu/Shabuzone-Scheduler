@@ -1590,7 +1590,7 @@
     
     // --- Excel 다운로드 ---
     // --- Excel 다운로드 (ExcelJS - 색상 완벽 지원!) ---
-            window.downloadExcel = async () => {
+                window.downloadExcel = async () => {
       if (typeof ExcelJS === 'undefined') {
         alert('❌ ExcelJS library not loaded!');
         return;
@@ -1618,12 +1618,10 @@
           }
         });
     
-        // 열 너비: # | Name | Day1 | Day2 | ...
         const columns = [{width:5},{width:15}];
         DAYS.forEach(() => columns.push({width:14}));
         worksheet.columns = columns;
     
-        // Row 1: Schedule 제목
         const totalCols = 2 + DAYS.length;
         const lastCol = String.fromCharCode(65 + totalCols - 1);
         worksheet.mergeCells('A1:' + lastCol + '1');
@@ -1634,7 +1632,6 @@
         titleCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF667eea'}};
         titleCell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
     
-        // Row 2: # | Name | Day headers
         const dayHeaderRow = worksheet.getRow(2);
         dayHeaderRow.height = 20;
         dayHeaderRow.values = ['','Name',...DAYS];
@@ -1645,7 +1642,6 @@
           cell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
         });
     
-        // Row 3: Day short names (Mon, Tue, ...)
         const shortDayRow = worksheet.getRow(3);
         shortDayRow.height = 18;
         shortDayRow.values = ['','', ...DAYS.map(d=>d.substring(0,3))];
@@ -1658,6 +1654,10 @@
     
         let currentRow = 4;
         orderedEmployees.forEach((emp,idx)=>{
+          // 짝수/홀수로 배경색 변경
+          const isEven = idx % 2 === 0;
+          const groupBgColor = isEven ? 'FFFFFFFF' : 'FFF5F5F5'; // 흰색 / 연한 회색
+    
           // Lunch Row
           const lunchRow = worksheet.getRow(currentRow);
           lunchRow.height = 18;
@@ -1675,7 +1675,13 @@
           numCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F0F0'}};
           numCell.font = {bold:true,size:10};
           numCell.alignment = {horizontal:'center',vertical:'middle'};
-          numCell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
+          // 직원 그룹 테두리: 위, 왼쪽, 오른쪽만
+          numCell.border = {
+            top:{style:'thick'},
+            left:{style:'thick'},
+            bottom:{style:'thick'},
+            right:{style:'medium'}
+          };
     
           // 이름 셀 (Lunch + Dinner 병합)
           worksheet.mergeCells('B'+currentRow+':B'+(currentRow+1));
@@ -1683,7 +1689,12 @@
           nameCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF9F9F9'}};
           nameCell.font = {bold:true,size:10};
           nameCell.alignment = {horizontal:'center',vertical:'middle'};
-          nameCell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
+          nameCell.border = {
+            top:{style:'thick'},
+            left:{style:'medium'},
+            bottom:{style:'thick'},
+            right:{style:'medium'}
+          };
     
           // Lunch 셀 스타일
           for(let i=0; i<DAYS.length; i++){
@@ -1691,12 +1702,23 @@
             const daySchedule = state.schedule[day]||{};
             const lunchShift = (daySchedule.lunch||[]).find(e=>e.id===emp.id);
             const cell = lunchRow.getCell(3+i);
+            
             if(lunchShift){
               cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:getShiftColorARGB(lunchShift.shift)}};
               cell.font = {bold:true,size:9};
+            } else {
+              // 빈 셀도 그룹 배경색
+              cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:groupBgColor}};
             }
+            
             cell.alignment = {horizontal:'center',vertical:'middle'};
-            cell.border = {top:{style:'thick'},left:{style:'thick'},bottom:{style:'medium'},right:{style:'thick'}};
+            // 위쪽만 두껍게, 나머지 얇게
+            cell.border = {
+              top:{style:'thick'},
+              left:{style:'thin'},
+              bottom:{style:'hair'},  // 매우 얇은 선
+              right: i === DAYS.length-1 ? {style:'thick'} : {style:'thin'}
+            };
           }
     
           currentRow++;
@@ -1718,18 +1740,27 @@
             const daySchedule = state.schedule[day]||{};
             const dinnerShift = (daySchedule.dinner||[]).find(e=>e.id===emp.id);
             const cell = dinnerRow.getCell(3+i);
+            
             if(dinnerShift){
               cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:getShiftColorARGB(dinnerShift.shift)}};
               cell.font = {bold:true,size:9};
+            } else {
+              cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:groupBgColor}};
             }
+            
             cell.alignment = {horizontal:'center',vertical:'middle'};
-            cell.border = {top:{style:'medium'},left:{style:'thick'},bottom:{style:'thick'},right:{style:'thick'}};
+            // 아래쪽만 두껍게, 나머지 얇게
+            cell.border = {
+              top:{style:'hair'},
+              left:{style:'thin'},
+              bottom:{style:'thick'},
+              right: i === DAYS.length-1 ? {style:'thick'} : {style:'thin'}
+            };
           }
     
           currentRow++;
         });
     
-        // 빈 줄
         currentRow++;
     
         // Lunch Count
@@ -1813,6 +1844,9 @@
         alert('❌ Error downloading Excel: ' + error.message);
       }
     };
+    
+
+
     
 
 
